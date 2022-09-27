@@ -1,0 +1,9 @@
+project:
+  output-dir: _docs
+
+website:
+  title: "course22p2"
+  site-url: "https://fastai.github.io/course22p2"
+  description: "course.fast.ai 2022 part 2 - under construction"
+  repo-branch: master
+  repo-url: "https://github.com/fastai/course22p2"
