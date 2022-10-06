@@ -1,3 +1,4 @@
+#!/usr/bin/env python
 "Renumber files starting at 01"
 
 from fastcore.utils import *
