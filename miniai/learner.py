@@ -181,7 +181,7 @@ class CudaCB(Callback):
 
 # %% ../nbs/07_learner.ipynb 28
 class ProgressCB(Callback):
-    def before_epoch(self): self.learn.dl = progress_bar(self.learn.dl)
+    def before_epoch(self): self.learn.dl = progress_bar(self.learn.dl, leave=False)
 
 # %% ../nbs/07_learner.ipynb 29
 class MetricsCB(Callback):
@@ -199,4 +199,4 @@ class TrainingLearner(Learner):
     def predict(self): self.preds = self.model(self.batch[0])
     def get_loss(self): self.loss = self.loss_func(self.preds, self.batch[1])
     def backward(self): self.loss.backward()
-    def step(self): self.opt.step();self.learn.opt.zero_grad()             
+    def step(self): self.opt.step();self.opt.zero_grad()             
