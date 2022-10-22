@@ -16,6 +16,7 @@ from functools import partial
 from torch import tensor,nn,optim
 from torch.utils.data import DataLoader,default_collate
 import torch.nn.functional as F
+import torchvision.transforms.functional as TF
 from datasets import load_dataset,load_dataset_builder
 
 from .datasets import *

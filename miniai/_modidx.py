@@ -65,4 +65,8 @@ d = { 'settings': { 'branch': 'master',
                                 'miniai.learner.to_cuda': ('learner.html#to_cuda', 'miniai/learner.py'),
                                 'miniai.learner.with_cbs': ('learner.html#with_cbs', 'miniai/learner.py'),
                                 'miniai.learner.with_cbs.__call__': ('learner.html#with_cbs.__call__', 'miniai/learner.py'),
-                                'miniai.learner.with_cbs.__init__': ('learner.html#with_cbs.__init__', 'miniai/learner.py')}}}
+                                'miniai.learner.with_cbs.__init__': ('learner.html#with_cbs.__init__', 'miniai/learner.py')},
+            'miniai.stability': { 'miniai.stability.get_grid': ('stability.html#get_grid', 'miniai/stability.py'),
+                                  'miniai.stability.show_image': ('stability.html#show_image', 'miniai/stability.py'),
+                                  'miniai.stability.show_images': ('stability.html#show_images', 'miniai/stability.py'),
+                                  'miniai.stability.subplots': ('stability.html#subplots', 'miniai/stability.py')}}}
