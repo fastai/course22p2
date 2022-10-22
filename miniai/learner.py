@@ -3,7 +3,7 @@
 # %% auto 0
 __all__ = ['DataLoaders', 'to_cuda', 'Learner', 'Metric', 'Accuracy', 'Loss', 'identity', 'CancelFitException',
            'CancelBatchException', 'CancelEpochException', 'with_cbs', 'Callback', 'TrainCB', 'CudaCB', 'MetricsCB',
-           'ProgressCB', 'TrainingLearner']
+           'ProgressCB', 'MomentumLearner']
 
 # %% ../nbs/07_learner.ipynb 1
 import pickle,gzip,math,os,time,shutil,torch,matplotlib as mpl,numpy as np,matplotlib.pyplot as plt
@@ -22,7 +22,7 @@ from .datasets import *
 
 from fastprogress import progress_bar,master_bar
 
-# %% ../nbs/07_learner.ipynb 8
+# %% ../nbs/07_learner.ipynb 7
 class DataLoaders:
     def __init__(self, *dls): self.train,self.valid = dls[:2]
 
@@ -30,12 +30,12 @@ class DataLoaders:
     def from_dd(cls, dd, batch_size, as_tuple=True):
         return cls(*[DataLoader(ds, batch_size, collate_fn=collate_dict(ds)) for ds in dd.values()])
 
-# %% ../nbs/07_learner.ipynb 10
+# %% ../nbs/07_learner.ipynb 9
 def to_cuda(x):
     if isinstance(x, Mapping): return {k:v.cuda() for k,v in x.items()}
     return type(x)(o.cuda() for o in x)
 
-# %% ../nbs/07_learner.ipynb 11
+# %% ../nbs/07_learner.ipynb 10
 class Learner:
     def __init__(self, model, dls, loss_func, lr, opt_func=optim.SGD): fc.store_attr()
 
@@ -72,46 +72,39 @@ class Learner:
             self.one_epoch(True)
             self.one_epoch(False)
 
-# %% ../nbs/07_learner.ipynb 15
+# %% ../nbs/07_learner.ipynb 14
 class Metric:
     def __init__(self): self.reset()
-    def reset(self): self.inps,self.targs,self.ns = [],[],[]
+    def reset(self): self.vals,self.ns = [],[]
     def add(self, inp, targ=None, n=1):
-        self.inps.append(inp)
-        if targ is not None: self.targs.append(targ)
+        self.last = self.forward(inp, targ)
+        self.vals.append(self.last)
         self.ns.append(n)
-    def add_batch(self, inps, targs):
-        for inp,targ in zip(inps,targs): self.add(inp,targ)
-    def __call__(self, inps=None, targs=None, ns=None):
-        inps = self.inps if inps is None else inps
-        targs = self.targs if targs is None else targs
-        if ns is None: ns = self.ns
-        if ns is None: ns = [1]*len(inps)
-        return self.forward(tensor(inps), tensor(targs) if targs else None, tensor(ns))
-    def forward(self, inps, targs, ns): raise NotImplementedError()
+    def __call__(self, inps=None, targs=None):
+        ns = tensor(self.ns)
+        return (tensor(self.vals)*ns).sum()/ns.sum()
+    def forward(self, inps, targs): raise NotImplementedError()
 
-# %% ../nbs/07_learner.ipynb 16
+# %% ../nbs/07_learner.ipynb 15
 class Accuracy(Metric):
-    def forward(self, inps, targs, ns):
-        res = (inps==targs).float()*ns
-        return res.sum()/ns.sum()
+    def forward(self, inps, targs): return (inps==targs).float().mean()
 
-# %% ../nbs/07_learner.ipynb 18
+# %% ../nbs/07_learner.ipynb 17
 class Loss(Metric):
-    def forward(self, inps, targs, ns): return (inps*ns).sum()/ns.sum()
+    def forward(self, inps, targs): return inps
 
-# %% ../nbs/07_learner.ipynb 21
+# %% ../nbs/07_learner.ipynb 20
 def identity(*args):
     if not args: return
     x,*args = args
     return (x,)+args if args else x
 
-# %% ../nbs/07_learner.ipynb 22
+# %% ../nbs/07_learner.ipynb 21
 class CancelFitException(Exception): pass
 class CancelBatchException(Exception): pass
 class CancelEpochException(Exception): pass
 
-# %% ../nbs/07_learner.ipynb 23
+# %% ../nbs/07_learner.ipynb 22
 class with_cbs:
     def __init__(self, nm): self.nm = nm
     def __call__(self, f):
@@ -123,7 +116,7 @@ class with_cbs:
             except globals()[f'Cancel{self.nm.title()}Exception']: pass
         return _f
 
-# %% ../nbs/07_learner.ipynb 24
+# %% ../nbs/07_learner.ipynb 23
 class Learner():
     def __init__(self, model, dls, loss_func, lr, cbs, opt_func=optim.SGD):
         fc.store_attr()
@@ -160,16 +153,16 @@ class Learner():
             self.one_epoch(False)
         
     def __getattr__(self, name):
-        if name[0]=='_': raise AttributeError(name)
-        return partial(self.callback, name)
+        if name in ('predict','get_loss','backward','step','zero_grad'): return partial(self.callback, name)
+        raise AttributeError(name)
 
     def callback(self, method_nm):
         for cb in sorted(self.cbs, key=attrgetter('order')): getattr(cb, method_nm,identity)()
 
-# %% ../nbs/07_learner.ipynb 25
+# %% ../nbs/07_learner.ipynb 24
 class Callback(): order = 0
 
-# %% ../nbs/07_learner.ipynb 26
+# %% ../nbs/07_learner.ipynb 25
 class TrainCB(Callback):
     def predict(self): self.learn.preds = self.learn.model(self.learn.batch[0])
     def get_loss(self): self.learn.loss = self.learn.loss_func(self.learn.preds, self.learn.batch[1])
@@ -177,40 +170,52 @@ class TrainCB(Callback):
     def step(self): self.learn.opt.step()
     def zero_grad(self): self.learn.opt.zero_grad()
 
-# %% ../nbs/07_learner.ipynb 27
+# %% ../nbs/07_learner.ipynb 26
 class CudaCB(Callback):
     def before_fit(self): self.learn.model.cuda()
     def before_batch(self): self.learn.batch = to_cuda(self.learn.batch)
 
-# %% ../nbs/07_learner.ipynb 28
+# %% ../nbs/07_learner.ipynb 27
 class MetricsCB(Callback):
-    def __init__(self, metric): self.metric,self.loss_m = metric,Loss()
+    def __init__(self, metric=None):
+        self.loss_m = Loss()
+        self.all = [self.loss_m]
+        if metric:
+            self.metric = metric
+            self.all.append(metric)
+
     def log(self, *s): print(self.learn.epoch, self.learn.model.training, *s)
     def before_fit(self): self.learn.metrics = self
 
-    def before_epoch(self):
-        self.metric.reset()
-        self.loss_m.reset()
-    def after_epoch(self): self.log(*map(str, (self.metric(), self.loss_m())))
+    def before_epoch(self): [o.reset() for o in self.all]
+    def after_epoch(self): self.log(*[f'{o():.3f}' for o in self.all])
 
     def after_batch(self):
-        self.metric.add_batch(self.learn.preds.argmax(dim=1), self.learn.batch[1])
-        self.loss_m.add(self.learn.loss, len(self.learn.batch[0]))
+        if hasattr(self, 'metric'):
+            self.metric.add(self.learn.preds.argmax(dim=1), self.learn.batch[1])
+        self.loss_m.add(self.learn.loss, n=len(self.learn.batch[0]))
 
-# %% ../nbs/07_learner.ipynb 29
+# %% ../nbs/07_learner.ipynb 28
 class ProgressCB(Callback):
     order=MetricsCB.order+1
     def before_fit(self):
-        self.learn.epochs = master_bar(self.learn.epochs)
-        self.learn.metrics.log = self._log
-    def _log(self, *s): self.learn.epochs.write(' :: '.join(s))
-    def before_epoch(self): self.learn.dl = progress_bar(self.learn.dl, leave=False, parent=self.learn.epochs)
-    def after_batch(self): self.learn.dl.comment = f'{self.learn.loss:.3f}'
+        self.learn.epochs = self.mbar = master_bar(self.learn.epochs)
+        if hasattr(self.learn, 'metrics'): self.learn.metrics.log = self._log
+        self.losses = []
+    def _log(self, *s): self.mbar.write(' :: '.join(s))
+    def before_epoch(self): self.learn.dl = progress_bar(self.learn.dl, leave=False, parent=self.mbar)
+    def after_batch(self):
+        self.learn.dl.comment = f'{self.learn.loss:.3f}'
+        if hasattr(self.learn, 'metrics') and self.learn.model.training:
+            self.losses.append(self.learn.metrics.loss_m.last.item())
+            self.mbar.update_graph([[list(range(len(self.losses))), self.losses]])
 
-# %% ../nbs/07_learner.ipynb 33
-class TrainingLearner(Learner):
+# %% ../nbs/07_learner.ipynb 32
+class MomentumLearner(Learner):
     def predict(self): self.preds = self.model(self.batch[0])
     def get_loss(self): self.loss = self.loss_func(self.preds, self.batch[1])
     def backward(self): self.loss.backward()
     def step(self): self.opt.step()
-    def zero_grad(self): self.opt.zero_grad()
+    def zero_grad(self):
+        with torch.no_grad():
+            for p in self.model.parameters(): p.grad *= 0.85
