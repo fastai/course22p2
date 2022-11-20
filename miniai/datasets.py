@@ -17,20 +17,20 @@ from datasets import load_dataset,load_dataset_builder
 # %% auto 0
 __all__ = ['inplace', 'collate_dict', 'show_image', 'subplots', 'get_grid', 'show_images']
 
-# %% ../nbs/05_datasets.ipynb 20
+# %% ../nbs/05_datasets.ipynb 22
 def inplace(f):
     def _f(b):
         f(b)
         return b
     return _f
 
-# %% ../nbs/05_datasets.ipynb 30
+# %% ../nbs/05_datasets.ipynb 32
 def collate_dict(ds):
     get = itemgetter(*ds.features)
     def _f(b): return get(default_collate(b))
     return _f
 
-# %% ../nbs/05_datasets.ipynb 34
+# %% ../nbs/05_datasets.ipynb 36
 @fc.delegates(plt.Axes.imshow)
 def show_image(im, ax=None, figsize=None, title=None, **kwargs):
     "Show a PIL or PyTorch image on `ax`."
@@ -45,7 +45,7 @@ def show_image(im, ax=None, figsize=None, title=None, **kwargs):
     ax.axis('off')
     return ax
 
-# %% ../nbs/05_datasets.ipynb 38
+# %% ../nbs/05_datasets.ipynb 40
 @fc.delegates(plt.subplots, keep=True)
 def subplots(
     nrows:int=1, # Number of rows in returned axes grid
@@ -62,7 +62,7 @@ def subplots(
     if nrows*ncols==1: ax = array([ax])
     return fig,ax
 
-# %% ../nbs/05_datasets.ipynb 42
+# %% ../nbs/05_datasets.ipynb 44
 @fc.delegates(subplots)
 def get_grid(
     n:int, # Number of axes
@@ -84,7 +84,7 @@ def get_grid(
     if title is not None: fig.suptitle(title, weight=weight, size=size)
     return fig,axs
 
-# %% ../nbs/05_datasets.ipynb 44
+# %% ../nbs/05_datasets.ipynb 46
 @fc.delegates(subplots)
 def show_images(ims:list, # Images to show
                 nrows:int=1, # Number of rows in grid
