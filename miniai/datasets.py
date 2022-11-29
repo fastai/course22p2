@@ -32,17 +32,19 @@ def collate_dict(ds):
 
 # %% ../nbs/05_datasets.ipynb 36
 @fc.delegates(plt.Axes.imshow)
-def show_image(im, ax=None, figsize=None, title=None, **kwargs):
+def show_image(im, ax=None, figsize=None, title=None, noframe=True, **kwargs):
     "Show a PIL or PyTorch image on `ax`."
     if fc.hasattrs(im, ('cpu','permute')):
         im = im.cpu()
-        if im.shape[0]<5: im=im.permute(1,2,0)
+        if len(im.shape)==3 and im.shape[0]<5: im=im.permute(1,2,0)
     elif not isinstance(im,np.ndarray): im=np.array(im)
     if im.shape[-1]==1: im=im[...,0]
     if ax is None: _,ax = plt.subplots(figsize=figsize)
     ax.imshow(im, **kwargs)
     if title is not None: ax.set_title(title)
-    ax.axis('off')
+    ax.set_xticks([]) 
+    ax.set_yticks([]) 
+    if noframe: ax.axis('off')
     return ax
 
 # %% ../nbs/05_datasets.ipynb 40
