@@ -17,15 +17,16 @@ from .datasets import *
 from .learner import *
 
 # %% auto 0
-__all__ = ['set_seed', 'Hook', 'append_stats', 'Hooks']
+__all__ = ['set_seed', 'Hook', 'append_stats', 'Hooks', 'get_hist', 'get_min']
 
-# %% ../nbs/10_activations.ipynb 6
+# %% ../nbs/10_activations.ipynb 5
 def set_seed(seed):
+    torch.use_deterministic_algorithms(True)
     torch.manual_seed(seed)
     random.seed(seed)
     np.random.seed(seed)
 
-# %% ../nbs/10_activations.ipynb 33
+# %% ../nbs/10_activations.ipynb 31
 class Hook():
     def __init__(self, m, f): self.hook = m.register_forward_hook(partial(f, self))
     def remove(self): self.hook.remove()
@@ -33,11 +34,11 @@ class Hook():
 
 def append_stats(hook, mod, inp, outp):
     if not hasattr(hook,'stats'): hook.stats = ([],[])
-    acts = outp.data.cpu()
+    acts = to_cpu(outp)
     hook.stats[0].append(acts.mean())
     hook.stats[1].append(acts.std())
 
-# %% ../nbs/10_activations.ipynb 39
+# %% ../nbs/10_activations.ipynb 42
 class Hooks(list):
     def __init__(self, ms, f): super().__init__([Hook(m, f) for m in ms])
     def __enter__(self, *args): return self
@@ -48,3 +49,20 @@ class Hooks(list):
         super().__delitem__(i)
     def remove(self):
         for h in self: h.remove()
+
+# %% ../nbs/10_activations.ipynb 46
+def append_stats(hook, mod, inp, outp):
+    if not hasattr(hook,'stats'): hook.stats = ([],[],[])
+    acts = to_cpu(outp)
+    hook.stats[0].append(acts.mean())
+    hook.stats[1].append(acts.std())
+    hook.stats[2].append(acts.abs().histc(40,0,10))
+
+# %% ../nbs/10_activations.ipynb 49
+# Thanks to @ste for initial version of histgram plotting code
+def get_hist(h): return torch.stack(h.stats[2]).t().float().log1p()
+
+# %% ../nbs/10_activations.ipynb 51
+def get_min(h):
+    h1 = torch.stack(h.stats[2]).t().float()
+    return h1[:2].sum(0)/h1.sum(0)
