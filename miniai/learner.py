@@ -2,7 +2,7 @@
 
 # %% auto 0
 __all__ = ['DataLoaders', 'Learner', 'CancelFitException', 'CancelBatchException', 'CancelEpochException', 'run_cbs', 'Callback',
-           'DeviceCB', 'to_cpu', 'MetricsCB', 'ProgressCB', 'TrainCB', 'MomentumLearner', 'LRFinderCB']
+           'DeviceCB', 'to_cpu', 'MetricsCB', 'TrainCB', 'ProgressCB', 'MomentumLearner', 'LRFinderCB']
 
 # %% ../nbs/09_learner.ipynb 1
 import pickle,gzip,math,os,time,shutil,torch,matplotlib as mpl,numpy as np,matplotlib.pyplot as plt
@@ -84,22 +84,23 @@ def run_cbs(cbs, method_nm):
 # %% ../nbs/09_learner.ipynb 15
 class Callback(): order = 0
 
-# %% ../nbs/09_learner.ipynb 27
-class DeviceCB(Callback):
-    def before_fit(self): self.learn.model.to(def_device)
-    def before_batch(self): self.learn.batch = to_device(self.learn.batch)
-
 # %% ../nbs/09_learner.ipynb 29
+class DeviceCB(Callback):
+    def __init__(self, device=def_device): fc.store_attr()
+    def before_fit(self): self.learn.model.to(self.device)
+    def before_batch(self): self.learn.batch = to_device(self.learn.batch, device=self.device)
+
+# %% ../nbs/09_learner.ipynb 31
 from torcheval.metrics import MulticlassAccuracy,Mean
 
-# %% ../nbs/09_learner.ipynb 32
+# %% ../nbs/09_learner.ipynb 34
 def to_cpu(x):
     if isinstance(x, Mapping): return {k:to_cpu(v) for k,v in x.items()}
     if isinstance(x, list): return [to_cpu(o) for o in x]
     if isinstance(x, tuple): return tuple(to_cpu(list(x)))
     return x.detach().cpu()
 
-# %% ../nbs/09_learner.ipynb 33
+# %% ../nbs/09_learner.ipynb 35
 class MetricsCB(Callback):
     def __init__(self, *ms, **metrics):
         for o in ms: metrics[type(o).__name__] = o
@@ -107,7 +108,7 @@ class MetricsCB(Callback):
         self.all_metrics = copy(metrics)
         self.all_metrics['loss'] = self.loss = Mean()
 
-    def _log(self, d): print(self.learn.epoch, self.learn.model.training, d)
+    def _log(self, d): print(d)
     def before_fit(self): self.learn.metrics = self
     def before_epoch(self): [o.reset() for o in self.all_metrics.values()]
     def after_epoch(self):
@@ -121,7 +122,7 @@ class MetricsCB(Callback):
         for m in self.metrics.values(): m.update(to_cpu(self.learn.preds), y)
         self.loss.update(to_cpu(self.learn.loss), weight=len(x))
 
-# %% ../nbs/09_learner.ipynb 36
+# %% ../nbs/09_learner.ipynb 38
 class Learner():
     def __init__(self, model, dls, loss_func, lr, cbs, opt_func=optim.SGD):
         fc.store_attr()
@@ -132,8 +133,8 @@ class Learner():
         try:
             self.callback(f'before_{nm}')
             yield
-            self.callback(f'after_{nm}')
         except globals()[f'Cancel{nm.title()}Exception']: pass
+        finally: self.callback(f'after_{nm}')
 
     def one_epoch(self, train):
         self.model.train(train)
@@ -163,7 +164,15 @@ class Learner():
 
     def callback(self, method_nm): run_cbs(self.cbs, method_nm)
 
-# %% ../nbs/09_learner.ipynb 37
+# %% ../nbs/09_learner.ipynb 39
+class TrainCB(Callback):
+    def predict(self): self.learn.preds = self.learn.model(self.learn.batch[0])
+    def get_loss(self): self.learn.loss = self.learn.loss_func(self.learn.preds, self.learn.batch[1])
+    def backward(self): self.learn.loss.backward()
+    def step(self): self.learn.opt.step()
+    def zero_grad(self): self.learn.opt.zero_grad()
+
+# %% ../nbs/09_learner.ipynb 40
 class ProgressCB(Callback):
     order = MetricsCB.order+1
     def __init__(self, plot=False): self.plot = plot
@@ -179,28 +188,24 @@ class ProgressCB(Callback):
             self.losses.append(self.learn.loss.item())
             self.mbar.update_graph([[fc.L.range(self.losses), self.losses]])
 
-# %% ../nbs/09_learner.ipynb 38
-class TrainCB(Callback):
-    def predict(self): self.learn.preds = self.learn.model(self.learn.batch[0])
-    def get_loss(self): self.learn.loss = self.learn.loss_func(self.learn.preds, self.learn.batch[1])
-    def backward(self): self.learn.loss.backward()
-    def step(self): self.learn.opt.step()
-    def zero_grad(self): self.learn.opt.zero_grad()
-
-# %% ../nbs/09_learner.ipynb 42
+# %% ../nbs/09_learner.ipynb 44
 class MomentumLearner(Learner):
+    def __init__(self, model, dls, loss_func, lr, cbs, opt_func=optim.SGD, mom=0.85):
+        self.mom = mom
+        super().__init__(model, dls, loss_func, lr, cbs, opt_func)
+
     def predict(self): self.preds = self.model(self.batch[0])
     def get_loss(self): self.loss = self.loss_func(self.preds, self.batch[1])
     def backward(self): self.loss.backward()
     def step(self): self.opt.step()
     def zero_grad(self):
         with torch.no_grad():
-            for p in self.model.parameters(): p.grad *= 0.85
-
-# %% ../nbs/09_learner.ipynb 48
-from torch.optim.lr_scheduler import ExponentialLR
+            for p in self.model.parameters(): p.grad *= self.mom
 
 # %% ../nbs/09_learner.ipynb 50
+from torch.optim.lr_scheduler import ExponentialLR
+
+# %% ../nbs/09_learner.ipynb 52
 class LRFinderCB(Callback):
     def __init__(self, gamma=1.3): fc.store_attr()
     
@@ -217,3 +222,7 @@ class LRFinderCB(Callback):
         if loss < self.min: self.min = loss
         if loss > self.min*3: raise CancelFitException()
         self.sched.step()
+
+    def after_fit(self):
+        plt.plot(self.lrs, self.losses)
+        plt.xscale('log')
