@@ -207,7 +207,7 @@ from torch.optim.lr_scheduler import ExponentialLR
 
 # %% ../nbs/09_learner.ipynb 52
 class LRFinderCB(Callback):
-    def __init__(self, gamma=1.3): fc.store_attr()
+    def __init__(self, gamma=1.3, max_mult=3): fc.store_attr()
     
     def before_fit(self):
         self.sched = ExponentialLR(self.learn.opt, self.gamma)
@@ -220,7 +220,7 @@ class LRFinderCB(Callback):
         loss = to_cpu(self.learn.loss)
         self.losses.append(loss)
         if loss < self.min: self.min = loss
-        if loss > self.min*3: raise CancelFitException()
+        if loss > self.min*self.max_mult: raise CancelFitException()
         self.sched.step()
 
     def after_fit(self):
