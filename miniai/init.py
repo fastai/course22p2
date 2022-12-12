@@ -50,7 +50,6 @@ def clean_tb():
     if hasattr(sys, 'last_traceback'):
         traceback.clear_frames(sys.last_traceback)
         delattr(sys, 'last_traceback')
-        gc.collect()
     if hasattr(sys, 'last_type'): delattr(sys, 'last_type')
     if hasattr(sys, 'last_value'): delattr(sys, 'last_value')
 
@@ -58,6 +57,8 @@ def clean_tb():
 def clean_mem():
     clean_tb()
     clean_ipython_hist()
+    gc.collect()
+    torch.cuda.empty_cache()
 
 # %% ../nbs/11_initializing.ipynb 91
 class GeneralRelu(nn.Module):
