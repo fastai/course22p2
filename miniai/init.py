@@ -26,7 +26,7 @@ from .conv import *
 from .learner import *
 from .activations import *
 
-# %% ../nbs/11_initializing.ipynb 8
+# %% ../nbs/11_initializing.ipynb 12
 def clean_ipython_hist():
     # Code in this function mainly copied from IPython source
     if not 'get_ipython' in globals(): return
@@ -41,7 +41,7 @@ def clean_ipython_hist():
     hm.input_hist_raw[:] = [''] * pc
     hm._i = hm._ii = hm._iii = hm._i00 =  ''
 
-# %% ../nbs/11_initializing.ipynb 9
+# %% ../nbs/11_initializing.ipynb 13
 def clean_tb():
     # h/t Piotr Czapla
     if hasattr(sys, 'last_traceback'):
@@ -50,7 +50,7 @@ def clean_tb():
     if hasattr(sys, 'last_type'): delattr(sys, 'last_type')
     if hasattr(sys, 'last_value'): delattr(sys, 'last_value')
 
-# %% ../nbs/11_initializing.ipynb 10
+# %% ../nbs/11_initializing.ipynb 14
 def clean_mem():
     clean_tb()
     clean_ipython_hist()
@@ -65,7 +65,7 @@ class GeneralRelu(nn.Module):
 
     def forward(self, x): 
         x = F.leaky_relu(x,self.leak) if self.leak is not None else F.relu(x)
-        if self.sub is not None: x.sub_(self.sub)
+        if self.sub is not None: x -= self.sub
         if self.maxv is not None: x.clamp_max_(self.maxv)
         return x
 
@@ -82,8 +82,8 @@ def init_weights(m, leaky=0.):
     if isinstance(m, (nn.Conv1d,nn.Conv2d,nn.Conv3d,nn.Linear)): init.kaiming_normal_(m.weight, a=leaky)
 
 # %% ../nbs/11_initializing.ipynb 115
-def conv(ni, nf, ks=3, stride=2, act=nn.ReLU, norm=None):
-    layers = [nn.Conv2d(ni, nf, stride=stride, kernel_size=ks, padding=ks//2, bias=norm is None)]
+def conv(ni, nf, ks=3, stride=2, act=nn.ReLU, norm=None, bias=True):
+    layers = [nn.Conv2d(ni, nf, stride=stride, kernel_size=ks, padding=ks//2, bias=bias)]
     if norm: layers.append(norm(nf))
     if act: layers.append(act())
     return nn.Sequential(*layers)
@@ -92,4 +92,4 @@ def conv(ni, nf, ks=3, stride=2, act=nn.ReLU, norm=None):
 def get_model(act=nn.ReLU, nfs=None, norm=None):
     if nfs is None: nfs = [1,8,16,32,64]
     layers = [conv(nfs[i], nfs[i+1], act=act, norm=norm) for i in range(len(nfs)-1)]
-    return nn.Sequential(*layers, conv(nfs[-1],10, act=None, norm=None), nn.Flatten()).to(def_device)
+    return nn.Sequential(*layers, conv(nfs[-1],10, act=None, norm=None, bias=False), nn.Flatten()).to(def_device)

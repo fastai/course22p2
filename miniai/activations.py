@@ -51,11 +51,11 @@ class HooksCallback(Callback):
         super().__init__()
     
     def before_fit(self):
-        mods = fc.filter_ex(self.learn.model.modules(), self.mod_filter)
+        mods = fc.filter_ex(self.model.modules(), self.mod_filter)
         self.hooks = Hooks(mods, self._hookfunc)
 
     def _hookfunc(self, *args, **kwargs):
-        if self.learn.model.training: self.hookfunc(*args, **kwargs)
+        if self.training: self.hookfunc(*args, **kwargs)
 
     def after_fit(self): self.hooks.remove()
     def __iter__(self): return iter(self.hooks)

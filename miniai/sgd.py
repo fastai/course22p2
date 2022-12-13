@@ -27,18 +27,18 @@ from .learner import *
 from .activations import *
 from .init import *
 
-# %% ../nbs/12_accel_sgd.ipynb 40
+# %% ../nbs/12_accel_sgd.ipynb 42
 class BaseSchedCB(Callback):
     def __init__(self, sched): self.sched = sched
     def before_fit(self): self.schedo = self.sched(self.opt)
     def step(self): 
         if self.training: self.schedo.step()
 
-# %% ../nbs/12_accel_sgd.ipynb 41
+# %% ../nbs/12_accel_sgd.ipynb 43
 class BatchSchedCB(BaseSchedCB):
     def after_batch(self): self.step()
 
-# %% ../nbs/12_accel_sgd.ipynb 42
+# %% ../nbs/12_accel_sgd.ipynb 44
 class RecorderCB(Callback):
     def __init__(self, **d): self.d = d
     def before_fit(self): self.recs = {k:[] for k in self.d}

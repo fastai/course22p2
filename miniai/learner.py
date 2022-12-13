@@ -49,7 +49,7 @@ def run_cbs(cbs, method_nm):
 # %% ../nbs/09_learner.ipynb 15
 class Callback():
     order = 0
-    _fwd = 'model opt batch epoch'.split()
+    _fwd = 'model','opt','batch','epoch'
 
     def __getattr__(self, name):
         if name in self._fwd: return getattr(self.learn, name)
