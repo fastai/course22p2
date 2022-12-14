@@ -92,4 +92,4 @@ def conv(ni, nf, ks=3, stride=2, act=nn.ReLU, norm=None, bias=True):
 def get_model(act=nn.ReLU, nfs=None, norm=None):
     if nfs is None: nfs = [1,8,16,32,64]
     layers = [conv(nfs[i], nfs[i+1], act=act, norm=norm) for i in range(len(nfs)-1)]
-    return nn.Sequential(*layers, conv(nfs[-1],10, act=None, norm=None, bias=False), nn.Flatten()).to(def_device)
+    return nn.Sequential(*layers, conv(nfs[-1],10, act=None, norm=norm, bias=False), nn.Flatten()).to(def_device)
