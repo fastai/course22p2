@@ -3,7 +3,7 @@
 # %% auto 0
 __all__ = ['DataLoaders', 'CancelFitException', 'CancelBatchException', 'CancelEpochException', 'run_cbs', 'Callback',
            'SingleBatchCB', 'to_cpu', 'MetricsCB', 'DeviceCB', 'Learner', 'TrainCB', 'ProgressCB', 'TrainLearner',
-           'MomentumLearner', 'LRFinderCB']
+           'MomentumLearner', 'LRFinderCB', 'lr_find']
 
 # %% ../nbs/09_learner.ipynb 1
 import pickle,gzip,math,os,time,shutil,torch,matplotlib as mpl,numpy as np,matplotlib.pyplot as plt
@@ -107,7 +107,8 @@ class DeviceCB(Callback):
 
 # %% ../nbs/09_learner.ipynb 38
 class Learner():
-    def __init__(self, model, dls, loss_func, lr, cbs, opt_func=optim.SGD):
+    def __init__(self, model, dls, loss_func, lr=None, cbs=None, opt_func=optim.SGD):
+        cbs = fc.L(cbs)
         fc.store_attr()
         for cb in cbs: cb.learn = self
     
@@ -133,20 +134,34 @@ class Learner():
                         self.step()
                         self.zero_grad()
     
-    def fit(self, n_epochs):
-        self.n_epochs = n_epochs
-        self.epochs = range(n_epochs)
-        self.opt = self.opt_func(self.model.parameters(), self.lr)
-        with self.callback_ctx('fit'):
-            for self.epoch in self.epochs:
-                self.one_epoch(True)
-                with torch.no_grad(): self.one_epoch(False)
+    def fit(self, n_epochs, train=True, valid=True, cbs=None, lr=None):
+        cbs = fc.L(cbs)
+        # `add_cb` and `rm_cb` were added in lesson 18
+        for cb in cbs: self.add_cb(cb)
+        try:
+            self.n_epochs = n_epochs
+            self.epochs = range(n_epochs)
+            self.opt = self.opt_func(self.model.parameters(), self.lr if lr is None else lr)
+            with self.callback_ctx('fit'):
+                for self.epoch in self.epochs:
+                    if train: self.one_epoch(True)
+                    if valid: torch.no_grad()(self.one_epoch)(False)
+        finally:
+            for cb in cbs: self.rm_cb(cb)
 
     def __getattr__(self, name):
         if name in ('predict','get_loss','backward','step','zero_grad'): return partial(self.callback, name)
         raise AttributeError(name)
 
     def callback(self, method_nm): run_cbs(self.cbs, method_nm)
+
+    def add_cb(self, cb):
+        cb.learn = self
+        self.cbs.append(cb)
+    
+    def rm_cb(self, cb):
+        cb.learn = None
+        self.cbs.remove(cb)
 
 # %% ../nbs/09_learner.ipynb 39
 class TrainCB(Callback):
@@ -189,7 +204,7 @@ class TrainLearner(Learner):
 
 # %% ../nbs/09_learner.ipynb 45
 class MomentumLearner(TrainLearner):
-    def __init__(self, model, dls, loss_func, lr, cbs, opt_func=optim.SGD, mom=0.85):
+    def __init__(self, model, dls, loss_func, lr=None, cbs=None, opt_func=optim.SGD, mom=0.85):
         self.mom = mom
         super().__init__(model, dls, loss_func, lr, cbs, opt_func)
 
@@ -197,10 +212,10 @@ class MomentumLearner(TrainLearner):
         with torch.no_grad():
             for p in self.model.parameters(): p.grad *= self.mom
 
-# %% ../nbs/09_learner.ipynb 51
+# %% ../nbs/09_learner.ipynb 50
 from torch.optim.lr_scheduler import ExponentialLR
 
-# %% ../nbs/09_learner.ipynb 53
+# %% ../nbs/09_learner.ipynb 52
 class LRFinderCB(Callback):
     def __init__(self, gamma=1.3, max_mult=3): fc.store_attr()
     
@@ -215,9 +230,15 @@ class LRFinderCB(Callback):
         loss = to_cpu(self.learn.loss)
         self.losses.append(loss)
         if loss < self.min: self.min = loss
-        if loss > self.min*self.max_mult: raise CancelFitException()
+        if loss > self.min*self.max_mult:
+            raise CancelFitException()
         self.sched.step()
 
     def cleanup_fit(self):
         plt.plot(self.lrs, self.losses)
         plt.xscale('log')
+
+# %% ../nbs/09_learner.ipynb 54
+@fc.patch
+def lr_find(self:Learner, gamma=1.3, max_mult=3, start_lr=1e-5, max_epochs=10):
+    self.fit(max_epochs, lr=start_lr, cbs=LRFinderCB())
