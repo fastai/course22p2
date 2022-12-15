@@ -91,7 +91,7 @@ class MetricsCB(Callback):
     def after_epoch(self):
         log = {k:f'{v.compute():.3f}' for k,v in self.all_metrics.items()}
         log['epoch'] = self.learn.epoch
-        log['train'] = self.training
+        log['train'] = 'train' if self.training else 'eval'
         self._log(log)
 
     def after_batch(self):
@@ -162,9 +162,16 @@ class ProgressCB(Callback):
     def __init__(self, plot=False): self.plot = plot
     def before_fit(self):
         self.learn.epochs = self.mbar = master_bar(self.learn.epochs)
+        self.first = True
         if hasattr(self.learn, 'metrics'): self.learn.metrics._log = self._log
         self.losses = []
-    def _log(self, d): self.mbar.write(str(d))
+
+    def _log(self, d):
+        if self.first:
+            self.mbar.write(list(d), table=True)
+            self.first = False
+        self.mbar.write(list(d.values()), table=True)
+
     def before_epoch(self): self.learn.dl = progress_bar(self.learn.dl, leave=False, parent=self.mbar)
     def after_batch(self):
         self.learn.dl.comment = f'{self.learn.loss:.3f}'
