@@ -27,24 +27,26 @@ from .learner import *
 from .activations import *
 from .init import *
 
-# %% ../nbs/12_accel_sgd.ipynb 45
+# %% ../nbs/12_accel_sgd.ipynb 44
 class BaseSchedCB(Callback):
     def __init__(self, sched): self.sched = sched
-    def before_fit(self): self.schedo = self.sched(self.opt)
-    def step(self): 
-        if self.training: self.schedo.step()
+    def before_fit(self, learn): self.schedo = self.sched(learn.opt)
+    def step(self, learn):
+        if learn.training: self.schedo.step()
+
+# %% ../nbs/12_accel_sgd.ipynb 45
+class BatchSchedCB(BaseSchedCB):
+    def after_batch(self, learn): self.step(learn)
 
 # %% ../nbs/12_accel_sgd.ipynb 46
-class BatchSchedCB(BaseSchedCB):
-    def after_batch(self): self.step()
-
-# %% ../nbs/12_accel_sgd.ipynb 47
 class RecorderCB(Callback):
     def __init__(self, **d): self.d = d
-    def before_fit(self): self.recs = {k:[] for k in self.d}
+    def before_fit(self, learn):
+        self.recs = {k:[] for k in self.d}
+        self.pg = learn.opt.param_groups[0]
         
-    def after_batch(self):
-        if not self.training: return
+    def after_batch(self, learn):
+        if not learn.training: return
         for k,v in self.d.items():
             self.recs[k].append(v(self))
     
@@ -53,6 +55,3 @@ class RecorderCB(Callback):
             plt.plot(v, label=k)
             plt.legend()
             plt.show()
-
-    @property
-    def pg(self): return self.opt.param_groups[0]

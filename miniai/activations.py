@@ -50,14 +50,14 @@ class HooksCallback(Callback):
         fc.store_attr()
         super().__init__()
     
-    def before_fit(self):
-        mods = fc.filter_ex(self.model.modules(), self.mod_filter)
-        self.hooks = Hooks(mods, self._hookfunc)
+    def before_fit(self, learn):
+        mods = fc.filter_ex(learn.model.modules(), self.mod_filter)
+        self.hooks = Hooks(mods, partial(self._hookfunc, learn))
 
-    def _hookfunc(self, *args, **kwargs):
-        if self.training: self.hookfunc(*args, **kwargs)
+    def _hookfunc(self, learn, *args, **kwargs):
+        if learn.training: self.hookfunc(*args, **kwargs)
 
-    def after_fit(self): self.hooks.remove()
+    def after_fit(self, learn): self.hooks.remove()
     def __iter__(self): return iter(self.hooks)
     def __len__(self): return len(self.hooks)
 
