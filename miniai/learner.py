@@ -65,7 +65,7 @@ class Callback():
 # %% ../nbs/09_learner.ipynb 21
 class SingleBatchCB(Callback):
     order = 1
-    def after_batch(self): raise CancelEpochException()
+    def after_batch(self): raise CancelFitException()
 
 # %% ../nbs/09_learner.ipynb 30
 from torcheval.metrics import MulticlassAccuracy,Mean
@@ -95,7 +95,6 @@ class MetricsCB(Callback):
         self._log(log)
 
     def after_batch(self):
-        if not hasattr(self.learn, 'preds'): return
         x,y = to_cpu(self.learn.batch)
         for m in self.metrics.values(): m.update(to_cpu(self.learn.preds), y)
         self.loss.update(to_cpu(self.learn.loss), weight=len(x))
@@ -117,8 +116,9 @@ class Learner():
         try:
             self.callback(f'before_{nm}')
             yield
+            self.callback(f'after_{nm}')
         except globals()[f'Cancel{nm.title()}Exception']: pass
-        finally: self.callback(f'after_{nm}')
+        finally: self.callback(f'cleanup_{nm}')
 
     def one_epoch(self, train):
         self.model.train(train)
@@ -167,7 +167,6 @@ class ProgressCB(Callback):
     def _log(self, d): self.mbar.write(str(d))
     def before_epoch(self): self.learn.dl = progress_bar(self.learn.dl, leave=False, parent=self.mbar)
     def after_batch(self):
-        if not hasattr(self.learn, 'loss'): return
         self.learn.dl.comment = f'{self.learn.loss:.3f}'
         if self.plot and hasattr(self.learn, 'metrics') and self.training:
             self.losses.append(self.learn.loss.item())
@@ -212,6 +211,6 @@ class LRFinderCB(Callback):
         if loss > self.min*self.max_mult: raise CancelFitException()
         self.sched.step()
 
-    def after_fit(self):
+    def cleanup_fit(self):
         plt.plot(self.lrs, self.losses)
         plt.xscale('log')

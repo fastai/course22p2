@@ -20,8 +20,8 @@ from .learner import *
 __all__ = ['set_seed', 'Hook', 'Hooks', 'HooksCallback', 'append_stats', 'get_hist', 'get_min', 'ActivationStats']
 
 # %% ../nbs/10_activations.ipynb 4
-def set_seed(seed):
-    torch.use_deterministic_algorithms(True)
+def set_seed(seed, deterministic=False):
+    torch.use_deterministic_algorithms(deterministic)
     torch.manual_seed(seed)
     random.seed(seed)
     np.random.seed(seed)

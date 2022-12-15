@@ -76,11 +76,11 @@ def get_grid(
     **kwargs,
 ): # fig and axs
     "Return a grid of `n` axes, `rows` by `cols`"
-    if nrows: ncols = ncols or int(np.ceil(n/nrows))
+    if nrows: ncols = ncols or int(np.floor(n/nrows))
     elif ncols: nrows = nrows or int(np.ceil(n/ncols))
     else:
         nrows = int(math.sqrt(n))
-        ncols = int(np.ceil(n/nrows))
+        ncols = int(np.floor(n/nrows))
     fig,axs = subplots(nrows, ncols, **kwargs)
     for i in range(n, nrows*ncols): axs.flat[i].set_axis_off()
     if title is not None: fig.suptitle(title, weight=weight, size=size)
