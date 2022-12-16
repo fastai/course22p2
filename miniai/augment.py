@@ -60,7 +60,7 @@ class RandErase(nn.Module):
         self.pct,self.max_num = pct,max_num
     def forward(self, x): return rand_erase(x, self.pct, self.max_num)
 
-# %% ../nbs/14_augment.ipynb 53
+# %% ../nbs/14_augment.ipynb 52
 def _rand_copy1(x, pct):
     szx = int(pct*x.shape[-2])
     szy = int(pct*x.shape[-1])
@@ -70,14 +70,14 @@ def _rand_copy1(x, pct):
     sty2 = int(random.random()*(1-pct)*x.shape[-1])
     x[:,:,stx1:stx1+szx,sty1:sty1+szy] = x[:,:,stx2:stx2+szx,sty2:sty2+szy]
 
-# %% ../nbs/14_augment.ipynb 55
+# %% ../nbs/14_augment.ipynb 54
 def rand_copy(x, pct=0.2, max_num = 4):
     num = random.randint(0, max_num)
     for i in range(num): _rand_copy1(x, pct)
 #     print(num)
     return x
 
-# %% ../nbs/14_augment.ipynb 57
+# %% ../nbs/14_augment.ipynb 56
 class RandCopy(nn.Module):
     def __init__(self, pct=0.2, max_num=4):
         super().__init__()
