@@ -6,7 +6,7 @@ __all__ = ['DataLoaders', 'CancelFitException', 'CancelBatchException', 'CancelE
            'MomentumLearner', 'LRFinderCB', 'lr_find']
 
 # %% ../nbs/09_learner.ipynb 1
-import pickle,gzip,math,os,time,shutil,torch,matplotlib as mpl,numpy as np,matplotlib.pyplot as plt
+import typing,pickle,gzip,math,os,time,shutil,torch,matplotlib as mpl,numpy as np,matplotlib.pyplot as plt
 import fastcore.all as fc
 from collections.abc import Mapping
 from pathlib import Path
@@ -41,33 +41,61 @@ class CancelBatchException(Exception): pass
 class CancelEpochException(Exception): pass
 
 # %% ../nbs/09_learner.ipynb 14
-class Callback(): order = 0
+_CBMethodType = typing.Callable[['Learner'], None]
+class Callback:
+    order = 0
+    before_fit: _CBMethodType
+    after_fit: _CBMethodType
+    cleanup_fit: _CBMethodType
+    before_epoch: _CBMethodType
+    after_epoch: _CBMethodType
+    cleanup_epoch: _CBMethodType
+    before_batch: _CBMethodType
+    after_batch: _CBMethodType
+    cleanup_batch: _CBMethodType
+    predict: _CBMethodType
+    get_loss: _CBMethodType
+    backward: _CBMethodType
+    step: _CBMethodType
+    zero_grad: _CBMethodType
 class SimpleCB(Callback): pass
 
 # %% ../nbs/09_learner.ipynb 15
-def run_cbs(cbs, method_nm, learn=None):
-    for cb in sorted(cbs, key=attrgetter('order')):
-        method = getattr(cb, method_nm, None)
-        if method is not None:
-            if isinstance(cb, SimpleCB): method()
-            else: method(learn)
+def _tb_mark(qnm, f, ret_op='yield from'): 
+    return partial(fc.exec_local(f"""def {qnm}(f, *args,**kwargs): {ret_op} f(*args,**kwargs);""", qnm), f)
+    
+def _cb_chain(cb, next_node, learn):
+    if isinstance(cb.__self__, SimpleCB): cb()
+    else: cb(learn)
+    yield from next_node(learn)
 
-# %% ../nbs/09_learner.ipynb 21
+def _cb_chain_end(learn): yield id(learn)
+
+def run_cbs(cbs: typing.Iterable[Callback], method_nm, learn=None, run=next):
+    node = _cb_chain_end
+    for cb in reversed(sorted(cbs, key=attrgetter('order'))):
+        if hasattr(cb, method_nm):
+            node = _tb_mark(f'{type(cb).__name__}__{method_nm}', partial( _cb_chain, getattr(cb, method_nm), node))
+    gen = node(learn)
+    run(gen)
+    return gen
+
+# %% ../nbs/09_learner.ipynb 22
 class SingleBatchCB(SimpleCB):
     order = 1
     def after_batch(self): raise CancelFitException()
 
-# %% ../nbs/09_learner.ipynb 30
+# %% ../nbs/09_learner.ipynb 31
 from torcheval.metrics import MulticlassAccuracy,Mean
 
-# %% ../nbs/09_learner.ipynb 33
+# %% ../nbs/09_learner.ipynb 34
 def to_cpu(x):
     if isinstance(x, Mapping): return {k:to_cpu(v) for k,v in x.items()}
     if isinstance(x, list): return [to_cpu(o) for o in x]
     if isinstance(x, tuple): return tuple(to_cpu(list(x)))
     return x.detach().cpu()
 
-# %% ../nbs/09_learner.ipynb 34
+# %% ../nbs/09_learner.ipynb 35
 class MetricsCB(Callback):
     def __init__(self, *ms, **metrics):
         for o in ms: metrics[type(o).__name__] = o
@@ -90,26 +118,30 @@ class MetricsCB(Callback):
         for m in self.metrics.values(): m.update(to_cpu(learn.preds), y)
         self.loss.update(to_cpu(learn.loss), weight=len(x))
 
-# %% ../nbs/09_learner.ipynb 35
+# %% ../nbs/09_learner.ipynb 36
 class DeviceCB(Callback):
     def __init__(self, device=def_device): fc.store_attr()
     def before_fit(self, learn): learn.model.to(self.device)
     def before_batch(self, learn): learn.batch = to_device(learn.batch, device=self.device)
 
-# %% ../nbs/09_learner.ipynb 38
+# %% ../nbs/09_learner.ipynb 39
 class Learner():
+    model: nn.Module; dls: DataLoaders; loss_func: typing.Callable; lr: float|torch.Tensor; cbs: typing.Iterable[Callback]; opt_func = optim.SGD
     def __init__(self, model, dls, loss_func, lr=None, cbs=None, opt_func=optim.SGD):
         cbs = fc.L(cbs)
         fc.store_attr()
-    
+
     @contextmanager
     def callback_ctx(self, nm):
+        before = self.callback(f'before_{nm}', run=fc.noop)
         try:
-            self.callback(f'before_{nm}')
-            yield
+            yield from before
             self.callback(f'after_{nm}')
         except globals()[f'Cancel{nm.title()}Exception']: pass
-        finally: self.callback(f'cleanup_{nm}')
+        except Exception as e:
+            if e.__traceback__ and e.__traceback__.tb_next is None: raise # detect exception in current frame
+            before.throw(type(e), e, e.__traceback__)
+        finally: self.callback(f'cleanup_{nm}') 
 
     def one_epoch(self, train):
         self.model.train(train)
@@ -123,7 +155,6 @@ class Learner():
                         self.backward()
                         self.step()
                         self.zero_grad()
-    
     def fit(self, n_epochs, train=True, valid=True, cbs=None, lr=None):
         cbs = fc.L(cbs)
         # `add_cb` and `rm_cb` were added in lesson 18
@@ -143,12 +174,12 @@ class Learner():
         if name in ('predict','get_loss','backward','step','zero_grad'): return partial(self.callback, name)
         raise AttributeError(name)
 
-    def callback(self, method_nm): run_cbs(self.cbs, method_nm, self)
-    
+    def callback(self, method_nm, **kw): return run_cbs(self.cbs, method_nm, self, **kw)
+
     @property
     def training(self): return self.model.training
 
-# %% ../nbs/09_learner.ipynb 39
+# %% ../nbs/09_learner.ipynb 40
 class TrainCB(Callback):
     def predict(self, learn): learn.preds = learn.model(learn.batch[0])
     def get_loss(self, learn): learn.loss = learn.loss_func(learn.preds, learn.batch[1])
@@ -156,7 +187,7 @@ class TrainCB(Callback):
     def step(self, learn): learn.opt.step()
     def zero_grad(self, learn): learn.opt.zero_grad()
 
-# %% ../nbs/09_learner.ipynb 40
+# %% ../nbs/09_learner.ipynb 41
 class ProgressCB(Callback):
     order = MetricsCB.order+1
     def __init__(self, plot=False): self.plot = plot
@@ -179,7 +210,7 @@ class ProgressCB(Callback):
             self.losses.append(learn.loss.item())
             self.mbar.update_graph([[fc.L.range(self.losses), self.losses]])
 
-# %% ../nbs/09_learner.ipynb 44
+# %% ../nbs/09_learner.ipynb 45
 class TrainLearner(Learner):
     def predict(self): self.preds = self.model(self.batch[0])
     def get_loss(self): self.loss = self.loss_func(self.preds, self.batch[1])
@@ -187,7 +218,8 @@ class TrainLearner(Learner):
     def step(self): self.opt.step()
     def zero_grad(self): self.opt.zero_grad()
 
-# %% ../nbs/09_learner.ipynb 45
+
+# %% ../nbs/09_learner.ipynb 46
 class MomentumLearner(TrainLearner):
     def __init__(self, model, dls, loss_func, lr=None, cbs=None, opt_func=optim.SGD, mom=0.85):
         self.mom = mom
@@ -197,10 +229,10 @@ class MomentumLearner(TrainLearner):
         with torch.no_grad():
             for p in self.model.parameters(): p.grad *= self.mom
 
-# %% ../nbs/09_learner.ipynb 50
+# %% ../nbs/09_learner.ipynb 51
 from torch.optim.lr_scheduler import ExponentialLR
 
-# %% ../nbs/09_learner.ipynb 52
+# %% ../nbs/09_learner.ipynb 53
 class LRFinderCB(Callback):
     def __init__(self, gamma=1.3, max_mult=3): fc.store_attr()
     
@@ -223,7 +255,7 @@ class LRFinderCB(Callback):
         plt.plot(self.lrs, self.losses)
         plt.xscale('log')
 
-# %% ../nbs/09_learner.ipynb 54
+# %% ../nbs/09_learner.ipynb 55
 @fc.patch
 def lr_find(self:Learner, gamma=1.3, max_mult=3, start_lr=1e-5, max_epochs=10):
     self.fit(max_epochs, lr=start_lr, cbs=LRFinderCB(gamma=gamma, max_mult=max_mult))
