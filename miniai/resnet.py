@@ -47,7 +47,7 @@ class ResBlock(nn.Module):
 
     def forward(self, x): return self.act(self.convs(x) + self.idconv(self.pool(x)))
 
-# %% ../nbs/13_resnet.ipynb 19
+# %% ../nbs/13_resnet.ipynb 18
 @fc.patch
 def summary(self:Learner):
     res = '|Module|Input|Output|Num params|\n|--|--|--|--|\n'
