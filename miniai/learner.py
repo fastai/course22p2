@@ -41,23 +41,8 @@ class CancelBatchException(Exception): pass
 class CancelEpochException(Exception): pass
 
 # %% ../nbs/09_learner.ipynb 14
-_CBMethodType = typing.Callable[['Learner'], None]
 class Callback:
     order = 0
-    before_fit: _CBMethodType
-    after_fit: _CBMethodType
-    cleanup_fit: _CBMethodType
-    before_epoch: _CBMethodType
-    after_epoch: _CBMethodType
-    cleanup_epoch: _CBMethodType
-    before_batch: _CBMethodType
-    after_batch: _CBMethodType
-    cleanup_batch: _CBMethodType
-    predict: _CBMethodType
-    get_loss: _CBMethodType
-    backward: _CBMethodType
-    step: _CBMethodType
-    zero_grad: _CBMethodType
 class SimpleCB(Callback): pass
 
 # %% ../nbs/09_learner.ipynb 15
