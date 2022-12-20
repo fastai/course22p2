@@ -98,7 +98,7 @@ class DeviceCB(Callback):
 
 # %% ../nbs/09_learner.ipynb 38
 class Learner():
-    def __init__(self, model, dls, loss_func, lr=None, cbs=None, opt_func=optim.SGD):
+    def __init__(self, model, dls=(0,), loss_func=F.mse_loss, lr=0.1, cbs=None, opt_func=optim.SGD):
         cbs = fc.L(cbs)
         fc.store_attr()
     
@@ -124,7 +124,7 @@ class Learner():
                         self.step()
                         self.zero_grad()
     
-    def fit(self, n_epochs, train=True, valid=True, cbs=None, lr=None):
+    def fit(self, n_epochs=1, train=True, valid=True, cbs=None, lr=None):
         cbs = fc.L(cbs)
         # `add_cb` and `rm_cb` were added in lesson 18
         for cb in cbs: self.cbs.append(cb)
