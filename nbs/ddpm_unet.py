@@ -198,7 +198,8 @@ class Unet(nn.Module):
         self.final_res_block = block_klass(dim * 2, dim, time_emb_dim = time_dim)
         self.final_conv = nn.Conv2d(dim, self.out_dim, 1)
 
-    def forward(self, x, time, x_self_cond = None):
+    def forward(self, inp):
+        x,time = inp
         x = self.init_conv(x)
         r = x.clone()
 
