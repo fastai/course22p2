@@ -33,7 +33,6 @@ from .resnet import *
 def _flops(x, h, w):
     if x.dim()<3: return x.numel()
     if x.dim()==4: return x.numel()*h*w
-    raise Exception()
 
 @fc.patch
 def summary(self:Learner):
