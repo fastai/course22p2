@@ -90,7 +90,8 @@ class MetricsCB(Callback):
 # %% ../nbs/09_learner.ipynb 35
 class DeviceCB(Callback):
     def __init__(self, device=def_device): fc.store_attr()
-    def before_fit(self, learn): learn.model.to(self.device)
+    def before_fit(self, learn):
+        if hasattr(learn.model, 'to'): learn.model.to(self.device)
     def before_batch(self, learn): learn.batch = to_device(learn.batch, device=self.device)
 
 # %% ../nbs/09_learner.ipynb 39
@@ -169,7 +170,8 @@ class Learner():
         try:
             self.n_epochs = n_epochs
             self.epochs = range(n_epochs)
-            self.opt = self.opt_func(self.model.parameters(), self.lr if lr is None else lr)
+            if lr is None: lr = self.lr
+            if self.opt_func: self.opt = self.opt_func(self.model.parameters(), lr)
             with self.cb_ctx('fit'):
                 for self.epoch in self.epochs:
                     if train: self.one_epoch(True)
