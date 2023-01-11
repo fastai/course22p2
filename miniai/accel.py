@@ -44,10 +44,10 @@ class MixedPrecision(TrainCB):
         self.scaler.step(learn.opt)
         self.scaler.update()
 
-# %% ../nbs/17_DDPM_v2.ipynb 46
+# %% ../nbs/17_DDPM_v2.ipynb 48
 from accelerate import Accelerator
 
-# %% ../nbs/17_DDPM_v2.ipynb 47
+# %% ../nbs/17_DDPM_v2.ipynb 49
 class AccelerateCB(TrainCB):
     order = DeviceCB.order+10
     def __init__(self, n_inp=1, mixed_precision="fp16"):
