@@ -30,7 +30,9 @@ from .init import *
 # %% ../nbs/12_accel_sgd.ipynb 44
 class BaseSchedCB(Callback):
     def __init__(self, sched): self.sched = sched
-    def before_fit(self, learn): self.schedo = self.sched(learn.opt)
+    def before_fit(self, learn): 
+        self.schedo = self.sched(learn.opt)
+        learn.schedo = self.schedo
     def _step(self, learn):
         if learn.training: self.schedo.step()
 
