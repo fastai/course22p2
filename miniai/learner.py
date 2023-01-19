@@ -2,8 +2,8 @@
 
 # %% auto 0
 __all__ = ['DataLoaders', 'CancelFitException', 'CancelBatchException', 'CancelEpochException', 'Callback', 'run_cbs',
-           'SingleBatchCB', 'to_cpu', 'MetricsCB', 'DeviceCB', 'TrainCB', 'ProgressCB', 'Learner', 'TrainLearner',
-           'MomentumLearner', 'LRFinderCB', 'lr_find']
+           'SingleBatchCB', 'to_cpu', 'MetricsCB', 'DeviceCB', 'TrainCB', 'ProgressCB', 'with_cbs', 'Learner',
+           'TrainLearner', 'MomentumLearner', 'LRFinderCB', 'lr_find']
 
 # %% ../nbs/09_learner.ipynb 1
 import pickle,gzip,math,os,time,shutil,torch,matplotlib as mpl,numpy as np,matplotlib.pyplot as plt
@@ -127,16 +127,16 @@ class ProgressCB(Callback):
             self.mbar.update_graph([[fc.L.range(self.losses), self.losses]])
 
 # %% ../nbs/09_learner.ipynb 46
-class _CbCtxInner:
-    def __init__(self, outer, nm): self.outer,self.nm = outer,nm
-    def __enter__(self): self.outer.callback(f'before_{self.nm}')
-    def __exit__ (self, exc_type, exc_val, traceback):
-        chk_exc = globals()[f'Cancel{self.nm.title()}Exception']
-        try:
-            if not exc_type: self.outer.callback(f'after_{self.nm}')
-            return exc_type==chk_exc
-        except chk_exc: pass
-        finally: self.outer.callback(f'cleanup_{self.nm}')
+class with_cbs:
+    def __init__(self, nm): self.nm = nm
+    def __call__(self, f):
+        def _f(o, *args, **kwargs):
+            try:
+                o.callback(f'before_{self.nm}')
+                f(o, *args, **kwargs)
+                o.callback(f'after_{self.nm}')
+            except globals()[f'Cancel{self.nm.title()}Exception']: pass
+        return _f
 
 # %% ../nbs/09_learner.ipynb 47
 class Learner():
@@ -144,25 +144,34 @@ class Learner():
         cbs = fc.L(cbs)
         fc.store_attr()
 
-    def cb_ctx(self, nm): return _CbCtxInner(self, nm)
-                
-    def one_epoch(self, train):
-        self.model.train(train)
-        self.dl = self.dls.train if train else self.dls.valid
-        with self.cb_ctx('epoch'):
-            for self.iter,self.batch in enumerate(self.dl):
-                with self.cb_ctx('batch'):
-                    self.predict()
-                    self.callback('after_predict')
-                    self.get_loss()
-                    self.callback('after_loss')
-                    if self.training:
-                        self.backward()
-                        self.callback('after_backward')
-                        self.step()
-                        self.callback('after_step')
-                        self.zero_grad()
-    
+    @with_cbs('batch')
+    def _one_batch(self):
+        self.predict()
+        self.callback('after_predict')
+        self.get_loss()
+        self.callback('after_loss')
+        if self.training:
+            self.backward()
+            self.callback('after_backward')
+            self.step()
+            self.callback('after_step')
+            self.zero_grad()
+
+    @with_cbs('epoch')
+    def _one_epoch(self):
+        for self.iter,self.batch in enumerate(self.dl): self._one_batch()
+
+    def one_epoch(self, training):
+        self.model.train(training)
+        self.dl = self.dls.train if training else self.dls.valid
+        self._one_epoch()
+
+    @with_cbs('fit')
+    def _fit(self, train, valid):
+        for self.epoch in self.epochs:
+            if train: self.one_epoch(True)
+            if valid: torch.no_grad()(self.one_epoch)(False)
+
     def fit(self, n_epochs=1, train=True, valid=True, cbs=None, lr=None):
         cbs = fc.L(cbs)
         # `add_cb` and `rm_cb` were added in lesson 18
@@ -172,10 +181,7 @@ class Learner():
             self.epochs = range(n_epochs)
             if lr is None: lr = self.lr
             if self.opt_func: self.opt = self.opt_func(self.model.parameters(), lr)
-            with self.cb_ctx('fit'):
-                for self.epoch in self.epochs:
-                    if train: self.one_epoch(True)
-                    if valid: torch.no_grad()(self.one_epoch)(False)
+            self._fit(train, valid)
         finally:
             for cb in cbs: self.cbs.remove(cb)
 

@@ -61,7 +61,7 @@ def subplots(
     if figsize is None: figsize=(ncols*imsize, nrows*imsize)
     fig,ax = plt.subplots(nrows, ncols, figsize=figsize, **kwargs)
     if suptitle is not None: fig.suptitle(suptitle)
-    if nrows*ncols==1: ax = array([ax])
+    if nrows*ncols==1: ax = np.array([ax])
     return fig,ax
 
 # %% ../nbs/05_datasets.ipynb 44
