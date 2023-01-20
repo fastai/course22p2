@@ -136,6 +136,7 @@ class with_cbs:
                 f(o, *args, **kwargs)
                 o.callback(f'after_{self.nm}')
             except globals()[f'Cancel{self.nm.title()}Exception']: pass
+            finally: o.callback(f'cleanup_{self.nm}')
         return _f
 
 # %% ../nbs/09_learner.ipynb 47
