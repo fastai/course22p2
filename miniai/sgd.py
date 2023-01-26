@@ -4,22 +4,7 @@
 __all__ = ['BaseSchedCB', 'BatchSchedCB', 'HasLearnCB', 'RecorderCB', 'EpochSchedCB']
 
 # %% ../nbs/12_accel_sgd.ipynb 2
-import pickle,gzip,math,os,time,shutil,torch,matplotlib as mpl,numpy as np,matplotlib.pyplot as plt
-import fastcore.all as fc
-from collections.abc import Mapping
-from pathlib import Path
-from operator import attrgetter,itemgetter
-from functools import partial
-from copy import copy
-from contextlib import contextmanager
-
-import torchvision.transforms.functional as TF,torch.nn.functional as F
-from torch import tensor,nn,optim
-from torch.utils.data import DataLoader,default_collate
-from torch.nn import init
-from torch.optim import lr_scheduler
-from torcheval.metrics import MulticlassAccuracy
-from datasets import load_dataset,load_dataset_builder
+import torch
 
 from .datasets import *
 from .conv import *
@@ -27,23 +12,23 @@ from .learner import *
 from .activations import *
 from .init import *
 
-# %% ../nbs/12_accel_sgd.ipynb 44
+# %% ../nbs/12_accel_sgd.ipynb 45
 class BaseSchedCB(Callback):
     def __init__(self, sched): self.sched = sched
     def before_fit(self, learn): self.schedo = self.sched(learn.opt)
     def _step(self, learn):
         if learn.training: self.schedo.step()
 
-# %% ../nbs/12_accel_sgd.ipynb 45
+# %% ../nbs/12_accel_sgd.ipynb 46
 class BatchSchedCB(BaseSchedCB):
     def after_batch(self, learn): self._step(learn)
 
-# %% ../nbs/12_accel_sgd.ipynb 46
+# %% ../nbs/12_accel_sgd.ipynb 47
 class HasLearnCB(Callback):
     def before_fit(self, learn): self.learn = learn 
     def after_fit(self, learn): self.learn = None
 
-# %% ../nbs/12_accel_sgd.ipynb 47
+# %% ../nbs/12_accel_sgd.ipynb 48
 class RecorderCB(Callback):
     def __init__(self, **d): self.d = d
     def before_fit(self, learn):
@@ -61,6 +46,6 @@ class RecorderCB(Callback):
             plt.legend()
             plt.show()
 
-# %% ../nbs/12_accel_sgd.ipynb 53
+# %% ../nbs/12_accel_sgd.ipynb 54
 class EpochSchedCB(BaseSchedCB):
     def after_epoch(self, learn): self._step(learn)

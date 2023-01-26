@@ -4,22 +4,11 @@
 __all__ = ['summary', 'show_image_batch', 'CapturePreds', 'capture_preds', 'rand_erase', 'RandErase', 'rand_copy', 'RandCopy']
 
 # %% ../nbs/14_augment.ipynb 2
-import pickle,gzip,math,os,time,shutil,torch,random
-import fastcore.all as fc,matplotlib as mpl,numpy as np,matplotlib.pyplot as plt
-from collections.abc import Mapping
-from pathlib import Path
-from operator import attrgetter,itemgetter
-from functools import partial
-from copy import copy
-from contextlib import contextmanager
+import torch,random
+import fastcore.all as fc
 
-import torchvision.transforms.functional as TF,torch.nn.functional as F
-from torch import tensor,nn,optim
-from torch.utils.data import DataLoader,default_collate
+from torch import nn
 from torch.nn import init
-from torch.optim import lr_scheduler
-from torcheval.metrics import MulticlassAccuracy
-from datasets import load_dataset,load_dataset_builder
 
 from .datasets import *
 from .conv import *

@@ -2,35 +2,32 @@
 
 # %% ../nbs/05_datasets.ipynb 1
 from __future__ import annotations
-import pickle,gzip,math,os,time,shutil,torch,matplotlib as mpl,numpy as np,matplotlib.pyplot as plt
-from pathlib import Path
+import math,numpy as np,matplotlib.pyplot as plt
 from operator import itemgetter
 from itertools import zip_longest
 import fastcore.all as fc
 
-from torch import tensor,nn,optim
-from torch.utils.data import DataLoader,default_collate
-import torch.nn.functional as F
+from torch.utils.data import default_collate
 
-from datasets import load_dataset,load_dataset_builder
+from .training import *
 
 # %% auto 0
-__all__ = ['inplace', 'collate_dict', 'show_image', 'subplots', 'get_grid', 'show_images']
+__all__ = ['inplace', 'collate_dict', 'show_image', 'subplots', 'get_grid', 'show_images', 'DataLoaders']
 
-# %% ../nbs/05_datasets.ipynb 22
+# %% ../nbs/05_datasets.ipynb 23
 def inplace(f):
     def _f(b):
         f(b)
         return b
     return _f
 
-# %% ../nbs/05_datasets.ipynb 32
+# %% ../nbs/05_datasets.ipynb 33
 def collate_dict(ds):
     get = itemgetter(*ds.features)
     def _f(b): return get(default_collate(b))
     return _f
 
-# %% ../nbs/05_datasets.ipynb 36
+# %% ../nbs/05_datasets.ipynb 37
 @fc.delegates(plt.Axes.imshow)
 def show_image(im, ax=None, figsize=None, title=None, noframe=True, **kwargs):
     "Show a PIL or PyTorch image on `ax`."
@@ -47,7 +44,7 @@ def show_image(im, ax=None, figsize=None, title=None, noframe=True, **kwargs):
     if noframe: ax.axis('off')
     return ax
 
-# %% ../nbs/05_datasets.ipynb 40
+# %% ../nbs/05_datasets.ipynb 41
 @fc.delegates(plt.subplots, keep=True)
 def subplots(
     nrows:int=1, # Number of rows in returned axes grid
@@ -64,7 +61,7 @@ def subplots(
     if nrows*ncols==1: ax = np.array([ax])
     return fig,ax
 
-# %% ../nbs/05_datasets.ipynb 44
+# %% ../nbs/05_datasets.ipynb 45
 @fc.delegates(subplots)
 def get_grid(
     n:int, # Number of axes
@@ -86,7 +83,7 @@ def get_grid(
     if title is not None: fig.suptitle(title, weight=weight, size=size)
     return fig,axs
 
-# %% ../nbs/05_datasets.ipynb 46
+# %% ../nbs/05_datasets.ipynb 47
 @fc.delegates(subplots)
 def show_images(ims:list, # Images to show
                 nrows:int=1, # Number of rows in grid
@@ -96,3 +93,12 @@ def show_images(ims:list, # Images to show
     "Show all images `ims` as subplots with `rows` using `titles`"
     axs = get_grid(len(ims), **kwargs)[1].flat
     for im,t,ax in zip_longest(ims, titles or [], axs): show_image(im, ax=ax, title=t)
+
+# %% ../nbs/05_datasets.ipynb 51
+class DataLoaders:
+    def __init__(self, *dls): self.train,self.valid = dls[:2]
+
+    @classmethod
+    def from_dd(cls, dd, batch_size, as_tuple=True, **kwargs):
+        f = collate_dict(dd['train'])
+        return cls(*get_dls(*dd.values(), bs=batch_size, collate_fn=f))
