@@ -51,18 +51,22 @@ def show_image_batch(self:Learner, max_n=9, cbs=None, **kwargs):
 
 # %% ../nbs/14_augment.ipynb 38
 class CapturePreds(Callback):
-    def before_fit(self, learn): self.all_preds,self.all_targs = [],[]
+    def before_fit(self, learn): self.all_inps,self.all_preds,self.all_targs = [],[],[]
     def after_batch(self, learn):
+        self.all_inps. append(to_cpu(learn.batch[0]))
         self.all_preds.append(to_cpu(learn.preds))
         self.all_targs.append(to_cpu(learn.batch[1]))
-    def after_fit(self, learn): self.all_preds,self.all_targs = torch.cat(self.all_preds),torch.cat(self.all_targs)
+    def after_fit(self, learn):
+        self.all_preds,self.all_targs,self.all_inps = map(torch.cat, [self.all_preds,self.all_targs,self.all_inps])
 
 # %% ../nbs/14_augment.ipynb 39
 @fc.patch
-def capture_preds(self: Learner, cbs=None):
+def capture_preds(self: Learner, cbs=None, inps=False):
     cp = CapturePreds()
     self.fit(1, train=False, cbs=[cp]+fc.L(cbs))
-    return cp.all_preds,cp.all_targs
+    res = cp.all_preds,cp.all_targs
+    if inps: res = res+(cp.all_inps,)
+    return res
 
 # %% ../nbs/14_augment.ipynb 54
 def _rand_erase1(x, pct, xm, xs, mn, mx):

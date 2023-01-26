@@ -4,6 +4,7 @@
 __all__ = ['def_device', 'conv', 'to_device', 'collate_device']
 
 # %% ../nbs/07_convolutions.ipynb 2
+import torch
 from torch import nn
 
 from torch.utils.data import default_collate
