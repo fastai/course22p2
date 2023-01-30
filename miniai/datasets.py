@@ -86,7 +86,7 @@ def get_grid(
 # %% ../nbs/05_datasets.ipynb 47
 @fc.delegates(subplots)
 def show_images(ims:list, # Images to show
-                nrows:int=1, # Number of rows in grid
+                nrows:int|None=None, # Number of rows in grid
                 ncols:int|None=None, # Number of columns in grid (auto-calculated if None)
                 titles:list|None=None, # Optional list of titles for each image
                 **kwargs):
