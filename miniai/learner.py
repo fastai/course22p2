@@ -216,7 +216,7 @@ class LRFinderCB(Callback):
         loss = to_cpu(learn.loss)
         self.losses.append(loss)
         if loss < self.min: self.min = loss
-        if loss > self.min*self.max_mult:
+        if math.isnan(loss) or (loss > self.min*self.max_mult):
             raise CancelFitException()
         self.sched.step()
 
