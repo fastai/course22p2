@@ -63,7 +63,7 @@ class MetricsCB(Callback):
 
     def after_epoch(self, learn):
         log = {k:f'{v.compute():.3f}' for k,v in self.all_metrics.items()}
-        log['epoch'] = learn.epoch
+        log['epoch'] = str(learn.epoch)
         log['train'] = 'train' if learn.model.training else 'eval'
         self._log(log)
 
