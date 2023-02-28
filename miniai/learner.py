@@ -50,13 +50,16 @@ def to_cpu(x):
     return x.detach().cpu()
 
 # %% ../nbs/09_learner.ipynb 35
+from torcheval.metrics import Metric, Mean
+
 class MetricsCB(Callback):
-    def __init__(self, *ms, **metrics):
+    def __init__(self,  *ms, device=def_device, **metrics):
         for o in ms: metrics[type(o).__name__] = o
         self.metrics = metrics
+        for m in self.metrics.values(): m.to(device)
         self.all_metrics = copy(metrics)
-        self.all_metrics['loss'] = self.loss = Mean()
-
+        self.all_metrics['loss'] = self.loss = Mean(device='cpu' if 'mps' in device else device)
+        
     def _log(self, d): print(d)
     def before_fit(self, learn): learn.metrics = self
     def before_epoch(self, learn): [o.reset() for o in self.all_metrics.values()]
@@ -68,9 +71,9 @@ class MetricsCB(Callback):
         self._log(log)
 
     def after_batch(self, learn):
-        x,y,*_ = to_cpu(learn.batch)
-        for m in self.metrics.values(): m.update(to_cpu(learn.preds), y)
-        self.loss.update(to_cpu(learn.loss), weight=len(x))
+        x,y,*_ = learn.batch
+        for m in self.metrics.values(): m.update(learn.preds.to(m.device), y)
+        self.loss.update(learn.loss.to(self.loss.device), weight=len(x))
 
 # %% ../nbs/09_learner.ipynb 36
 class DeviceCB(Callback):
@@ -91,27 +94,37 @@ class TrainCB(Callback):
 # %% ../nbs/09_learner.ipynb 42
 class ProgressCB(Callback):
     order = MetricsCB.order+1
-    def __init__(self, plot=False): self.plot = plot
+    def __init__(self, plot=False, lag=10): fc.store_attr()
     def before_fit(self, learn):
         learn.epochs = self.mbar = master_bar(learn.epochs)
         self.first = True
         if hasattr(learn, 'metrics'): learn.metrics._log = self._log
         self.losses = []
-
+        self.gpu_losses = [] 
+        
     def _log(self, d):
         if self.first:
             self.mbar.write(list(d), table=True)
             self.first = False
         self.mbar.write(list(d.values()), table=True)
 
+    def _plot(self, lag=0): 
+        n = max(0,len(self.gpu_losses)-lag)
+        if n == 0: return
+        self.losses, self.gpu_losses = self.losses + [l.item() for l in self.gpu_losses[:n]], self.gpu_losses[n:]
+        self.mbar.update_graph([[fc.L.range(self.losses), self.losses]])
+        
     def before_epoch(self, learn): learn.dl = progress_bar(learn.dl, leave=False, parent=self.mbar)
     def after_batch(self, learn):
-        learn.dl.comment = f'{learn.loss:.3f}'
         if self.plot and hasattr(learn, 'metrics') and learn.training:
-            self.losses.append(learn.loss.item())
-            self.mbar.update_graph([[fc.L.range(self.losses), self.losses]])
+            self.gpu_losses.append(learn.loss.detach())
+            if len(self.gpu_losses) > 2* self.lag: self._plot(self.lag)
+    
+    def after_epoch(self, learn):
+        learn.dl.comment = f'{learn.loss:.3f}'
+        if learn.training: self._plot()
 
-# %% ../nbs/09_learner.ipynb 47
+# %% ../nbs/09_learner.ipynb 48
 class with_cbs:
     def __init__(self, nm): self.nm = nm
     def __call__(self, f):
@@ -124,7 +137,7 @@ class with_cbs:
             finally: o.callback(f'cleanup_{self.nm}')
         return _f
 
-# %% ../nbs/09_learner.ipynb 48
+# %% ../nbs/09_learner.ipynb 49
 class Learner():
     def __init__(self, model, dls=(0,), loss_func=F.mse_loss, lr=0.1, cbs=None, opt_func=optim.SGD):
         cbs = fc.L(cbs)
@@ -180,7 +193,7 @@ class Learner():
     @property
     def training(self): return self.model.training
 
-# %% ../nbs/09_learner.ipynb 51
+# %% ../nbs/09_learner.ipynb 52
 class TrainLearner(Learner):
     def predict(self): self.preds = self.model(self.batch[0])
     def get_loss(self): self.loss = self.loss_func(self.preds, self.batch[1])
@@ -188,7 +201,7 @@ class TrainLearner(Learner):
     def step(self): self.opt.step()
     def zero_grad(self): self.opt.zero_grad()
 
-# %% ../nbs/09_learner.ipynb 52
+# %% ../nbs/09_learner.ipynb 53
 class MomentumLearner(TrainLearner):
     def __init__(self, model, dls, loss_func, lr=None, cbs=None, opt_func=optim.SGD, mom=0.85):
         self.mom = mom
@@ -198,10 +211,10 @@ class MomentumLearner(TrainLearner):
         with torch.no_grad():
             for p in self.model.parameters(): p.grad *= self.mom
 
-# %% ../nbs/09_learner.ipynb 57
+# %% ../nbs/09_learner.ipynb 58
 from torch.optim.lr_scheduler import ExponentialLR
 
-# %% ../nbs/09_learner.ipynb 59
+# %% ../nbs/09_learner.ipynb 60
 class LRFinderCB(Callback):
     def __init__(self, gamma=1.3, max_mult=3): fc.store_attr()
     
@@ -224,7 +237,7 @@ class LRFinderCB(Callback):
         plt.plot(self.lrs, self.losses)
         plt.xscale('log')
 
-# %% ../nbs/09_learner.ipynb 61
+# %% ../nbs/09_learner.ipynb 62
 @fc.patch
 def lr_find(self:Learner, gamma=1.3, max_mult=3, start_lr=1e-5, max_epochs=10):
     self.fit(max_epochs, lr=start_lr, cbs=LRFinderCB(gamma=gamma, max_mult=max_mult))
