@@ -4,25 +4,22 @@
 __all__ = ['def_device', 'conv', 'to_device', 'collate_device']
 
 # %% ../nbs/07_convolutions.ipynb 2
-import pickle,gzip,math,os,time,shutil,torch,matplotlib as mpl, numpy as np
-import pandas as pd,matplotlib.pyplot as plt
-from pathlib import Path
-from torch import tensor
+import torch
 from torch import nn
 
-from torch.utils.data import DataLoader,default_collate
+from torch.utils.data import default_collate
 from typing import Mapping
 
 from .training import *
 from .datasets import *
 
-# %% ../nbs/07_convolutions.ipynb 68
+# %% ../nbs/07_convolutions.ipynb 69
 def conv(ni, nf, ks=3, stride=2, act=True):
     res = nn.Conv2d(ni, nf, stride=stride, kernel_size=ks, padding=ks//2)
     if act: res = nn.Sequential(res, nn.ReLU())
     return res
 
-# %% ../nbs/07_convolutions.ipynb 73
+# %% ../nbs/07_convolutions.ipynb 74
 def_device = 'mps' if torch.backends.mps.is_available() else 'cuda' if torch.cuda.is_available() else 'cpu'
 
 def to_device(x, device=def_device):
