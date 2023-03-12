@@ -189,9 +189,10 @@ class EmbUNetModel(nn.Module):
         return self.conv_out(x)
 
 # %% ../nbs/28_diffusion-attn-cond.ipynb 28
-def ddim_step(x_t, noise, abar_t, abar_t1, bbar_t, bbar_t1, eta, sig):
+def ddim_step(x_t, noise, abar_t, abar_t1, bbar_t, bbar_t1, eta, sig, clamp=True):
     sig = ((bbar_t1/bbar_t).sqrt() * (1-abar_t/abar_t1).sqrt()) * eta
-    x_0_hat = ((x_t-(1-abar_t).sqrt()*noise) / abar_t.sqrt()).clamp(-1,1)
+    x_0_hat = ((x_t-(1-abar_t).sqrt()*noise) / abar_t.sqrt())
+    if clamp: x_0_hat = x_0_hat.clamp(-1,1)
     if bbar_t1<=sig**2+0.01: sig=0.  # set to zero if very small or NaN
     x_t = abar_t1.sqrt()*x_0_hat + (bbar_t1-sig**2).sqrt()*noise
     x_t += sig * torch.randn(x_t.shape).to(x_t)
@@ -199,7 +200,7 @@ def ddim_step(x_t, noise, abar_t, abar_t1, bbar_t, bbar_t1, eta, sig):
 
 # %% ../nbs/28_diffusion-attn-cond.ipynb 29
 @torch.no_grad()
-def sample(f, model, sz, steps, eta=1.):
+def sample(f, model, sz, steps, eta=1., clamp=True):
     model.eval()
     ts = torch.linspace(1-1/steps,0,steps)
     x_t = torch.randn(sz).cuda()
@@ -209,7 +210,7 @@ def sample(f, model, sz, steps, eta=1.):
         abar_t = abar(t)
         noise = model((x_t, t))
         abar_t1 = abar(t-1/steps) if t>=1/steps else torch.tensor(1)
-        x_0_hat,x_t = f(x_t, noise, abar_t, abar_t1, 1-abar_t, 1-abar_t1, eta, 1-((i+1)/100))
+        x_0_hat,x_t = f(x_t, noise, abar_t, abar_t1, 1-abar_t, 1-abar_t1, eta, 1-((i+1)/100), clamp=clamp)
         preds.append(x_0_hat.float().cpu())
     return preds
 
