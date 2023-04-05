@@ -18,4 +18,3 @@ for video_id in video_ids:
     transcript = get_transcript(f'https://youtu.be/{video_id}')
     transcript = ' '.join(transcript.values()).replace(u'\xa0', u' ').replace('\n', ' ').replace('  ',' ')
     with open(video_id + ".txt", "w") as f: f.write(str(transcript))
-
