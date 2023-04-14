@@ -98,6 +98,7 @@ class ProgressCB(Callback):
         self.first = True
         if hasattr(learn, 'metrics'): learn.metrics._log = self._log
         self.losses = []
+        self.val_losses = []
 
     def _log(self, d):
         if self.first:
@@ -110,9 +111,15 @@ class ProgressCB(Callback):
         learn.dl.comment = f'{learn.loss:.3f}'
         if self.plot and hasattr(learn, 'metrics') and learn.training:
             self.losses.append(learn.loss.item())
-            self.mbar.update_graph([[fc.L.range(self.losses), self.losses]])
+            if self.val_losses: self.mbar.update_graph([[fc.L.range(self.losses), self.losses],[fc.L.range(learn.epoch).map(lambda x: (x+1)*len(learn.dls.train)), self.val_losses]])
+    
+    def after_epoch(self, learn): 
+        if not learn.training:
+            if self.plot and hasattr(learn, 'metrics'): 
+                self.val_losses.append(learn.metrics.all_metrics['loss'].compute())
+                self.mbar.update_graph([[fc.L.range(self.losses), self.losses],[fc.L.range(learn.epoch+1).map(lambda x: (x+1)*len(learn.dls.train)), self.val_losses]])
 
-# %% ../nbs/09_learner.ipynb 47
+# %% ../nbs/09_learner.ipynb 48
 class with_cbs:
     def __init__(self, nm): self.nm = nm
     def __call__(self, f):
@@ -125,7 +132,7 @@ class with_cbs:
             finally: o.callback(f'cleanup_{self.nm}')
         return _f
 
-# %% ../nbs/09_learner.ipynb 48
+# %% ../nbs/09_learner.ipynb 49
 class Learner():
     def __init__(self, model, dls=(0,), loss_func=F.mse_loss, lr=0.1, cbs=None, opt_func=optim.SGD):
         cbs = fc.L(cbs)
@@ -181,7 +188,7 @@ class Learner():
     @property
     def training(self): return self.model.training
 
-# %% ../nbs/09_learner.ipynb 51
+# %% ../nbs/09_learner.ipynb 52
 class TrainLearner(Learner):
     def predict(self): self.preds = self.model(self.batch[0])
     def get_loss(self): self.loss = self.loss_func(self.preds, self.batch[1])
@@ -189,7 +196,7 @@ class TrainLearner(Learner):
     def step(self): self.opt.step()
     def zero_grad(self): self.opt.zero_grad()
 
-# %% ../nbs/09_learner.ipynb 52
+# %% ../nbs/09_learner.ipynb 53
 class MomentumLearner(TrainLearner):
     def __init__(self, model, dls, loss_func, lr=None, cbs=None, opt_func=optim.SGD, mom=0.85):
         self.mom = mom
@@ -199,10 +206,10 @@ class MomentumLearner(TrainLearner):
         with torch.no_grad():
             for p in self.model.parameters(): p.grad *= self.mom
 
-# %% ../nbs/09_learner.ipynb 57
+# %% ../nbs/09_learner.ipynb 58
 from torch.optim.lr_scheduler import ExponentialLR
 
-# %% ../nbs/09_learner.ipynb 59
+# %% ../nbs/09_learner.ipynb 60
 class LRFinderCB(Callback):
     def __init__(self, gamma=1.3, max_mult=3): fc.store_attr()
     
@@ -225,7 +232,7 @@ class LRFinderCB(Callback):
         plt.plot(self.lrs, self.losses)
         plt.xscale('log')
 
-# %% ../nbs/09_learner.ipynb 61
+# %% ../nbs/09_learner.ipynb 62
 @fc.patch
 def lr_find(self:Learner, gamma=1.3, max_mult=3, start_lr=1e-5, max_epochs=10):
     self.fit(max_epochs, lr=start_lr, cbs=LRFinderCB(gamma=gamma, max_mult=max_mult))
