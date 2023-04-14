@@ -2,7 +2,7 @@ from pyyoutube import Api
 from youtube_transcript_downloader import get_transcript
 import os
 
-api = Api(api_key=os.environ['GOOGLE_API_KEY']
+api = Api(api_key=os.environ['GOOGLE_API_KEY'])
 playlist_id = "PLfYUBJiXbdtRUvTUYpLdfHHp9a58nWVXP"
 items = api.get_playlist_items(playlist_id=playlist_id)
 
